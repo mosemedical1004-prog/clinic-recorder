@@ -70,7 +70,7 @@ export function blobToBase64(blob: Blob): Promise<string> {
 
 export function base64ToBlob(base64: string, mimeType: string): Blob {
   const byteCharacters = atob(base64);
-  const byteArrays: Uint8Array[] = [];
+  const byteArrays: BlobPart[] = [];
 
   for (let offset = 0; offset < byteCharacters.length; offset += 512) {
     const slice = byteCharacters.slice(offset, offset + 512);
