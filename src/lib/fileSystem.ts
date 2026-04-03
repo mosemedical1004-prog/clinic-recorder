@@ -67,13 +67,13 @@ export async function requestSaveDirectory(): Promise<string | null> {
 
 /** Returns true if permission is already granted without prompting */
 async function hasPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
-  const opts = { mode: 'readwrite' as FileSystemPermissionMode };
+  const opts = { mode: 'readwrite' as 'readwrite' };
   return (await (handle as any).queryPermission(opts)) === 'granted';
 }
 
 /** Ensures readwrite permission, prompting if needed. Returns true if granted. */
 async function ensurePermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
-  const opts = { mode: 'readwrite' as FileSystemPermissionMode };
+  const opts = { mode: 'readwrite' as 'readwrite' };
   if ((await (handle as any).queryPermission(opts)) === 'granted') return true;
   return (await (handle as any).requestPermission(opts)) === 'granted';
 }
