@@ -24,14 +24,14 @@ export function setupAnalyser(
   return { analyserNode, sourceNode };
 }
 
-export function getFrequencyData(analyserNode: AnalyserNode): Uint8Array {
+export function getFrequencyData(analyserNode: AnalyserNode): Uint8Array<ArrayBuffer> {
   const bufferLength = analyserNode.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
   analyserNode.getByteFrequencyData(dataArray);
   return dataArray;
 }
 
-export function getWaveformData(analyserNode: AnalyserNode): Uint8Array {
+export function getWaveformData(analyserNode: AnalyserNode): Uint8Array<ArrayBuffer> {
   const bufferLength = analyserNode.fftSize;
   const dataArray = new Uint8Array(bufferLength);
   analyserNode.getByteTimeDomainData(dataArray);
@@ -74,7 +74,7 @@ export function base64ToBlob(base64: string, mimeType: string): Blob {
 
   for (let offset = 0; offset < byteCharacters.length; offset += 512) {
     const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
+    const byteNumbers: number[] = new Array(slice.length);
 
     for (let i = 0; i < slice.length; i++) {
       byteNumbers[i] = slice.charCodeAt(i);
@@ -96,7 +96,7 @@ export async function requestMicrophonePermission(): Promise<MediaStream> {
   });
 }
 
-export function calculateAudioLevel(dataArray: Uint8Array): number {
+export function calculateAudioLevel(dataArray: Uint8Array<ArrayBufferLike>): number {
   let sum = 0;
   for (let i = 0; i < dataArray.length; i++) {
     sum += dataArray[i];
