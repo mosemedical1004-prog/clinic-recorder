@@ -365,6 +365,50 @@ function AnalysisContent() {
               <ExportButtons session={session} />
             </div>
 
+            {/* Audio download */}
+            <div className="bg-dark-card border border-slate-700/50 rounded-2xl p-4">
+              <h3 className="text-white font-semibold mb-3">녹음 파일</h3>
+              {session.audioBlob ? (
+                <div className="space-y-3">
+                  <audio
+                    controls
+                    src={URL.createObjectURL(session.audioBlob)}
+                    className="w-full h-10 rounded-lg"
+                  />
+                  <button
+                    onClick={() => {
+                      const url = URL.createObjectURL(session.audioBlob!);
+                      const ext = session.audioBlob!.type.includes('ogg')
+                        ? 'ogg'
+                        : session.audioBlob!.type.includes('mp4')
+                        ? 'mp4'
+                        : 'webm';
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `진료녹음_${new Date(session.startTime).toISOString().slice(0, 10)}_${session.id.slice(0, 8)}.${ext}`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    오디오 다운로드
+                  </button>
+                  <p className="text-slate-500 text-xs text-center">
+                    {(session.audioBlob.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
+                </div>
+              ) : (
+                <div className="text-slate-500 text-sm text-center py-3">
+                  저장된 녹음 파일이 없습니다
+                </div>
+              )}
+            </div>
+
             {/* Quick transcript */}
             <div className="bg-dark-card border border-slate-700/50 rounded-2xl p-4">
               <h3 className="text-white font-semibold mb-3">전체 녹취록</h3>
