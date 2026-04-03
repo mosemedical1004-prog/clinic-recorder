@@ -49,13 +49,6 @@ export default function Header({
             <span className="text-red-400 font-medium text-sm">녹음 중</span>
           </span>
         );
-      case 'paused':
-        return (
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-            <span className="text-amber-400 font-medium text-sm">일시정지</span>
-          </span>
-        );
       case 'stopped':
         return (
           <span className="flex items-center gap-1.5">
@@ -75,11 +68,12 @@ export default function Header({
 
   const getLastSavedText = () => {
     if (isSaving) return '저장 중...';
-    if (!lastSaved) return '저장 안됨';
-    const diff = Math.floor((Date.now() - lastSaved) / 1000);
-    if (diff < 60) return `${diff}초 전 저장`;
-    const mins = Math.floor(diff / 60);
-    return `${mins}분 전 저장`;
+    if (!lastSaved) return null;
+    const time = new Date(lastSaved).toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `자동 저장됨 ${time}`;
   };
 
   return (
@@ -136,8 +130,6 @@ export default function Header({
             className={`font-mono text-2xl font-bold tabular-nums ${
               recordingState === 'recording'
                 ? 'text-red-400'
-                : recordingState === 'paused'
-                ? 'text-amber-400'
                 : 'text-slate-300'
             }`}
           >
@@ -170,44 +162,26 @@ export default function Header({
           </div>
 
           {/* Auto-save indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
-            {isSaving ? (
-              <svg
-                className="w-3.5 h-3.5 text-blue-400 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-3.5 h-3.5 text-green-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            )}
-            <span>{getLastSavedText()}</span>
-          </div>
+          {(isSaving || getLastSavedText()) && (
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
+              {isSaving ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>저장 중...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-green-400">{getLastSavedText()}</span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Current time */}
           <div className="text-slate-400 text-sm font-mono hidden lg:block">

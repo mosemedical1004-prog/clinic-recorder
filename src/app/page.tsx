@@ -101,8 +101,8 @@ export default function HomePage() {
 
   const autoSave = useAutoSave(
     getSessionForSave,
-    appSettings.autoSaveInterval,
-    recording.state === 'recording' || recording.state === 'paused'
+    60 * 60, // 60분마다 자동 저장
+    recording.state === 'recording'
   );
 
   // Add new patient
@@ -214,16 +214,6 @@ export default function HomePage() {
     wakeLock.request();
   };
 
-  const handlePause = () => {
-    recording.pause();
-    transcription.stop();
-  };
-
-  const handleResume = () => {
-    recording.resume();
-    transcription.start(appSettings.language);
-  };
-
   const handleStop = async () => {
     transcription.stop();
     const audioBlob = await recording.stop();
@@ -270,7 +260,7 @@ export default function HomePage() {
   };
 
   const handleAddPatientMarker = () => {
-    if (recording.state !== 'recording' && recording.state !== 'paused') return;
+    if (recording.state !== 'recording') return;
     const newPatient = addNewPatient();
     transcription.addManualSegment(
       `=== ${newPatient.number}번 환자 시작 ===`,
@@ -289,8 +279,7 @@ export default function HomePage() {
     }
   };
 
-  const isActive =
-    recording.state === 'recording' || recording.state === 'paused';
+  const isActive = recording.state === 'recording';
   const isStopped = recording.state === 'stopped';
 
   const currentSession: Session | null = session
@@ -358,7 +347,7 @@ export default function HomePage() {
             <AudioVisualizer
               analyserNode={recording.analyserNode}
               isRecording={recording.state === 'recording'}
-              isPaused={recording.state === 'paused'}
+              isPaused={false}
             />
           </div>
 
@@ -407,8 +396,6 @@ export default function HomePage() {
             <RecordingControls
               state={recording.state}
               onStart={handleStart}
-              onPause={handlePause}
-              onResume={handleResume}
               onStop={handleStop}
               onAddPatientMarker={handleAddPatientMarker}
               currentPatientNumber={patients.length}

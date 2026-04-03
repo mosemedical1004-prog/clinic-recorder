@@ -15,8 +15,6 @@ interface UseRecordingReturn {
   audioBlob: Blob | null;
   analyserNode: AnalyserNode | null;
   start: () => Promise<void>;
-  pause: () => void;
-  resume: () => void;
   stop: () => Promise<Blob | null>;
   error: string | null;
 }
@@ -35,8 +33,6 @@ export function useRecording(): UseRecordingReturn {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
-  const pausedDurationRef = useRef<number>(0);
-  const pauseStartRef = useRef<number>(0);
   const resolveStopRef = useRef<((blob: Blob | null) => void) | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -49,9 +45,7 @@ export function useRecording(): UseRecordingReturn {
   const startTimer = useCallback(() => {
     clearTimer();
     timerRef.current = setInterval(() => {
-      const elapsed =
-        Date.now() - startTimeRef.current - pausedDurationRef.current;
-      setDuration(elapsed);
+      setDuration(Date.now() - startTimeRef.current);
     }, 100);
   }, [clearTimer]);
 
@@ -60,23 +54,17 @@ export function useRecording(): UseRecordingReturn {
       setError(null);
       setAudioBlob(null);
       chunksRef.current = [];
-      pausedDurationRef.current = 0;
 
       const stream = await requestMicrophonePermission();
       streamRef.current = stream;
 
-      // Set up audio context and analyser
       const audioContext = createAudioContext();
       audioContextRef.current = audioContext;
 
-      const { analyserNode: analyser, sourceNode } = setupAnalyser(
-        audioContext,
-        stream
-      );
+      const { analyserNode: analyser, sourceNode } = setupAnalyser(audioContext, stream);
       sourceNodeRef.current = sourceNode;
       setAnalyserNode(analyser);
 
-      // Set up media recorder
       const mimeType = getSupportedMimeType();
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType || undefined,
@@ -100,36 +88,16 @@ export function useRecording(): UseRecordingReturn {
         }
       };
 
-      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorder.start(1000);
       startTimeRef.current = Date.now();
       setState('recording');
       startTimer();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to start recording';
+      const message = err instanceof Error ? err.message : '녹음을 시작할 수 없습니다';
       setError(message);
       setState('idle');
     }
   }, [startTimer]);
-
-  const pause = useCallback(() => {
-    if (mediaRecorderRef.current && state === 'recording') {
-      mediaRecorderRef.current.pause();
-      pauseStartRef.current = Date.now();
-      setState('paused');
-      clearTimer();
-    }
-  }, [state, clearTimer]);
-
-  const resume = useCallback(() => {
-    if (mediaRecorderRef.current && state === 'paused') {
-      const pauseDuration = Date.now() - pauseStartRef.current;
-      pausedDurationRef.current += pauseDuration;
-      mediaRecorderRef.current.resume();
-      setState('recording');
-      startTimer();
-    }
-  }, [state, startTimer]);
 
   const stop = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -139,30 +107,22 @@ export function useRecording(): UseRecordingReturn {
       }
 
       resolveStopRef.current = resolve;
-
       clearTimer();
 
-      if (
-        mediaRecorderRef.current.state !== 'inactive'
-      ) {
+      if (mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       } else {
         resolve(null);
       }
 
-      // Clean up stream tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
-
-      // Disconnect audio nodes
       if (sourceNodeRef.current) {
         sourceNodeRef.current.disconnect();
         sourceNodeRef.current = null;
       }
-
-      // Close audio context
       if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
@@ -173,7 +133,6 @@ export function useRecording(): UseRecordingReturn {
     });
   }, [clearTimer]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       clearTimer();
@@ -186,15 +145,5 @@ export function useRecording(): UseRecordingReturn {
     };
   }, [clearTimer]);
 
-  return {
-    state,
-    duration,
-    audioBlob,
-    analyserNode,
-    start,
-    pause,
-    resume,
-    stop,
-    error,
-  };
+  return { state, duration, audioBlob, analyserNode, start, stop, error };
 }
