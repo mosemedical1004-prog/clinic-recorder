@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { RecordingProvider } from '@/contexts/RecordingContext';
+import RecordingBanner from '@/components/RecordingBanner';
 
 export const metadata: Metadata = {
   title: '진료 녹음기 | Medical Clinic Recorder',
@@ -46,7 +48,10 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-dark-bg text-white min-h-screen">
-        {children}
+        <RecordingProvider>
+          <RecordingBanner />
+          {children}
+        </RecordingProvider>
       </body>
     </html>
   );

@@ -186,6 +186,34 @@ export function useTranscription(): UseTranscriptionReturn {
     currentPatientIdRef.current = patientId;
   }, []);
 
+  // Restart recognition when browser tab becomes visible again
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && shouldRestartRef.current) {
+        // Small delay to let the browser settle after tab switch
+        setTimeout(() => {
+          if (!shouldRestartRef.current) return;
+          if (recognitionRef.current) {
+            try { recognitionRef.current.stop(); } catch {}
+          }
+          const recognition = createRecognition(languageRef.current);
+          if (recognition) {
+            recognitionRef.current = recognition;
+            try {
+              recognition.start();
+              setIsListening(true);
+            } catch {}
+          }
+        }, 300);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [createRecognition]);
+
   // Cleanup
   useEffect(() => {
     return () => {
