@@ -1,18 +1,15 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { Session, Patient, SessionSettings, TranscriptSegment, PatientSummary } from '@/types';
+import { Session, Patient, SessionSettings } from '@/types';
 import { useRecording } from '@/hooks/useRecording';
 import { useTranscription } from '@/hooks/useTranscription';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useWakeLock } from '@/hooks/useWakeLock';
-import {
-  generateId,
-  detectNewPatient,
-  DEFAULT_SILENCE_TIMEOUT_MINUTES,
-} from '@/lib/patientDetector';
+import { generateId, detectNewPatient } from '@/lib/patientDetector';
 import { getSettings, saveSession, DEFAULT_SETTINGS } from '@/lib/db';
 import { autoSaveSessionToFile } from '@/lib/fileSystem';
+import * as speech from '@/lib/speechEngine';
 
 const SILENCE_TIMEOUT_LS_KEY = 'silenceTimeoutMinutes';
 
@@ -24,10 +21,7 @@ const DEFAULT_SESSION_SETTINGS: SessionSettings = {
   silenceTimeoutMinutes: DEFAULT_SETTINGS.silenceTimeoutMinutes,
 };
 
-interface AutoSaveNotice {
-  type: 'success' | 'error';
-  message: string;
-}
+interface AutoSaveNotice { type: 'success' | 'error'; message: string; }
 
 interface RecordingContextValue {
   session: Session | null;
@@ -42,7 +36,6 @@ interface RecordingContextValue {
   handleStart: () => Promise<void>;
   handleStop: () => Promise<void>;
   handleAddPatientMarker: () => void;
-  setSelectedPatientId?: (id: string | undefined) => void;
 }
 
 const RecordingContext = createContext<RecordingContextValue | null>(null);
@@ -64,6 +57,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   const patientsRef = useRef<Patient[]>([]);
   const currentPatientIdRef = useRef<string | undefined>();
   const durationRef = useRef(0);
+  const appSettingsRef = useRef(appSettings);
 
   const recording = useRecording();
   const transcription = useTranscription();
@@ -72,10 +66,15 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   // Keep refs in sync
   useEffect(() => { sessionRef.current = session; }, [session]);
   useEffect(() => { patientsRef.current = patients; }, [patients]);
-  useEffect(() => { currentPatientIdRef.current = currentPatientId; }, [currentPatientId]);
+  useEffect(() => {
+    currentPatientIdRef.current = currentPatientId;
+    // Sync current patient ID to speech engine so new segments get correct patient
+    speech.setCurrentPatientId(currentPatientId);
+  }, [currentPatientId]);
   useEffect(() => { durationRef.current = recording.duration; }, [recording.duration]);
+  useEffect(() => { appSettingsRef.current = appSettings; }, [appSettings]);
 
-  // Load settings on mount
+  // Load settings
   useEffect(() => {
     const load = async () => {
       try {
@@ -120,18 +119,15 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addNewPatient = useCallback((): Patient => {
-    const cur = patientsRef.current;
     const newPatient: Patient = {
       id: generateId(),
-      number: cur.length + 1,
+      number: patientsRef.current.length + 1,
       startTime: durationRef.current,
       transcriptSegments: [],
     };
-    if (cur.length > 0 && currentPatientIdRef.current) {
+    if (patientsRef.current.length > 0 && currentPatientIdRef.current) {
       setPatients((prev) =>
-        prev.map((p) =>
-          p.id === currentPatientIdRef.current ? { ...p, endTime: durationRef.current } : p
-        )
+        prev.map((p) => p.id === currentPatientIdRef.current ? { ...p, endTime: durationRef.current } : p)
       );
     }
     setPatients((prev) => [...prev, newPatient]);
@@ -139,9 +135,10 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     return newPatient;
   }, []);
 
-  // Auto-detect patients
+  // Auto-detect patients from transcript
   useEffect(() => {
-    if (!appSettings.autoDetectPatients || !sessionRef.current) return;
+    const settings = appSettingsRef.current;
+    if (!settings.autoDetectPatients || !sessionRef.current) return;
     const finals = transcription.segments.filter((s) => !s.isInterim);
     if (finals.length === 0) return;
     const latest = finals[finals.length - 1];
@@ -149,18 +146,21 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     const result = detectNewPatient(
       latest,
       finals.slice(0, -1),
-      appSettings.patientKeywords,
-      appSettings.silenceTimeoutMinutes
+      settings.patientKeywords,
+      settings.silenceTimeoutMinutes
     );
-    if (result.shouldCreateNewPatient && patientsRef.current.length > 0) addNewPatient();
-  }, [transcription.segments, appSettings, addNewPatient]);
+    if (result.shouldCreateNewPatient && patientsRef.current.length > 0) {
+      addNewPatient();
+    }
+  }, [transcription.segments, addNewPatient]);
 
-  // Assign patient ID to new segments
+  // Assign current patient to new unassigned segments via engine (no direct mutation)
   useEffect(() => {
     if (!currentPatientId) return;
-    const unassigned = transcription.segments.filter((s) => !s.isInterim && !s.patientId);
-    if (unassigned.length > 0) {
-      unassigned.forEach((seg) => { seg.patientId = currentPatientId; });
+    const hasUnassigned = transcription.segments.some((s) => !s.isInterim && !s.patientId);
+    if (hasUnassigned) {
+      speech.assignPatientToUnassigned(currentPatientId);
+      // Update patient's segment list
       setPatients((prev) =>
         prev.map((p) =>
           p.id === currentPatientId
@@ -172,6 +172,8 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
   }, [transcription.segments, currentPatientId]);
 
   const handleStart = useCallback(async () => {
+    const settings = appSettingsRef.current;
+    speech.clearTranscript();
     const sessionId = generateId();
     const firstPatient: Patient = { id: generateId(), number: 1, startTime: 0, transcriptSegments: [] };
     const newSession: Session = {
@@ -181,25 +183,23 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       patients: [firstPatient],
       transcript: [],
       lastSaved: Date.now(),
-      settings: appSettings,
+      settings,
     };
     setSession(newSession);
     setPatients([firstPatient]);
     setCurrentPatientId(firstPatient.id);
     await recording.start();
-    transcription.start(appSettings.language);
+    speech.start(settings.language);
     wakeLock.request();
-  }, [appSettings, recording, transcription, wakeLock]);
+  }, [recording, wakeLock]);
 
   const handleStop = useCallback(async () => {
-    transcription.stop();
+    speech.stop();
     const audioBlob = await recording.stop();
 
     if (currentPatientIdRef.current) {
       setPatients((prev) =>
-        prev.map((p) =>
-          p.id === currentPatientIdRef.current ? { ...p, endTime: durationRef.current } : p
-        )
+        prev.map((p) => p.id === currentPatientIdRef.current ? { ...p, endTime: durationRef.current } : p)
       );
     }
     wakeLock.release();
@@ -227,13 +227,13 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         setTimeout(() => setAutoSaveNotice(null), 6000);
       }
     }
-  }, [transcription, recording, wakeLock, autoSave]);
+  }, [recording, wakeLock, autoSave, transcription.segments]);
 
   const handleAddPatientMarker = useCallback(() => {
     if (recording.state !== 'recording') return;
     const p = addNewPatient();
-    transcription.addManualSegment(`=== ${p.number}번 환자 시작 ===`, p.id);
-  }, [recording.state, addNewPatient, transcription]);
+    speech.addManualSegment(`=== ${p.number}번 환자 시작 ===`, p.id);
+  }, [recording.state, addNewPatient]);
 
   return (
     <RecordingContext.Provider
