@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { formatDuration } from '@/lib/patientDetector';
 import { RecordingState } from '@/types';
+
+type TabName = 'recording' | 'history' | 'settings';
 
 interface HeaderProps {
   recordingState: RecordingState;
@@ -13,6 +14,8 @@ interface HeaderProps {
   isSaving: boolean;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  activeTab: TabName;
+  onTabChange: (tab: TabName) => void;
 }
 
 export default function Header({
@@ -23,6 +26,8 @@ export default function Header({
   isSaving,
   darkMode,
   onToggleDarkMode,
+  activeTab,
+  onTabChange,
 }: HeaderProps) {
   const [currentTime, setCurrentTime] = useState('');
 
@@ -81,7 +86,7 @@ export default function Header({
       <div className="flex items-center justify-between px-4 py-2.5 gap-4">
         {/* Left: Logo + Nav */}
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
+          <button onClick={() => onTabChange('recording')} className="flex items-center gap-2 shrink-0">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <svg
                 className="w-5 h-5 text-white"
@@ -100,27 +105,22 @@ export default function Header({
             <span className="text-white font-bold text-lg hidden sm:block">
               진료 녹음기
             </span>
-          </Link>
+          </button>
 
           <nav className="flex items-center gap-1 hidden md:flex">
-            <Link
-              href="/"
-              className="px-3 py-1.5 text-sm text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              녹음
-            </Link>
-            <Link
-              href="/history"
-              className="px-3 py-1.5 text-sm text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              기록
-            </Link>
-            <Link
-              href="/settings"
-              className="px-3 py-1.5 text-sm text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              설정
-            </Link>
+            {(['recording', 'history', 'settings'] as TabName[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => onTabChange(tab)}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  activeTab === tab
+                    ? 'text-white bg-slate-700'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                {tab === 'recording' ? '녹음' : tab === 'history' ? '기록' : '설정'}
+              </button>
+            ))}
           </nav>
         </div>
 
