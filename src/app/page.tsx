@@ -96,13 +96,13 @@ export default function HomePage() {
       )}
 
       {/* Tab content */}
-      {activeTab === 'history' ? (
+      {activeTab === 'history' && (
         <HistoryTab onSwitchToRecording={() => setActiveTab('recording')} />
-      ) : activeTab === 'settings' ? (
-        <SettingsTab />
-      ) : (
-        /* Recording tab */
-        <div className="flex flex-1 overflow-hidden">
+      )}
+      {activeTab === 'settings' && <SettingsTab />}
+
+      {/* Recording tab — always mounted, only hidden when another tab is active */}
+      <div className={`flex flex-1 overflow-hidden ${activeTab !== 'recording' ? 'hidden' : ''}`}>
           {/* Left panel */}
           <div className="flex flex-col flex-1 min-w-0 border-r border-slate-700/30">
             <div className="h-36 shrink-0 p-3 pb-2">
@@ -217,8 +217,7 @@ export default function HomePage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </div>
 
       <SessionSidebar
         currentSessionId={session?.id}

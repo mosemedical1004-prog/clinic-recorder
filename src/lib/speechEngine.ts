@@ -191,3 +191,13 @@ if (typeof document !== 'undefined') {
     }
   });
 }
+
+// ─── Watchdog: restart if shouldRestart but not listening (every 3 s) ────────
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    if (_shouldRestart && !_snap.isListening && !document.hidden) {
+      if (_recognition) { try { _recognition.stop(); } catch {} }
+      setTimeout(_createAndStart, 100);
+    }
+  }, 3000);
+}

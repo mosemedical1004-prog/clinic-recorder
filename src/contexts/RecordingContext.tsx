@@ -204,6 +204,25 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
     wakeLock.release();
 
+    // Auto-download audio file
+    if (audioBlob) {
+      const now = new Date(sessionRef.current?.startTime ?? Date.now());
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const ampm = now.getHours() < 12 ? '오전' : '오후';
+      const ext = audioBlob.type.includes('ogg') ? 'ogg' : audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
+      const filename = `${yyyy}-${mm}-${dd}_${ampm}_진료녹음.${ext}`;
+      const url = URL.createObjectURL(audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
     if (sessionRef.current) {
       const finalSession: Session = {
         ...sessionRef.current,
