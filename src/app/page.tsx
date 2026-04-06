@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import RecordingControls from '@/components/RecordingControls';
@@ -10,8 +10,10 @@ import SessionSidebar from '@/components/SessionSidebar';
 import ExportButtons from '@/components/ExportButtons';
 import HistoryTab from '@/components/tabs/HistoryTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
+import SaveFolderModal from '@/components/SaveFolderModal';
 import { useRecordingContext } from '@/contexts/RecordingContext';
 import { Session } from '@/types';
+import { isFileSystemAccessSupported, getSavedFolderNameSync } from '@/lib/fileSystem';
 
 type TabName = 'recording' | 'history' | 'settings';
 
@@ -27,6 +29,13 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>();
+  const [showFolderModal, setShowFolderModal] = useState(false);
+
+  useEffect(() => {
+    if (isFileSystemAccessSupported() && !getSavedFolderNameSync()) {
+      setShowFolderModal(true);
+    }
+  }, []);
 
   const handleToggleDarkMode = () => {
     const newMode = !darkMode;
@@ -227,6 +236,10 @@ export default function HomePage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
+
+      {showFolderModal && (
+        <SaveFolderModal onClose={() => setShowFolderModal(false)} />
+      )}
     </div>
   );
 }

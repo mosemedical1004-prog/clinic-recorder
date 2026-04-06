@@ -1,11 +1,10 @@
 import { Session } from '@/types';
 import { buildTxtContent } from './export';
 
-// Separate IDB instance just for storing FileSystemDirectoryHandle
-// (cannot be stored in the typed idb schema, but native IDB supports it)
 const FS_DB_NAME = 'clinic-fs-handles';
 const FS_STORE = 'handles';
 const DIR_KEY = 'save-directory';
+const LS_FOLDER_NAME_KEY = 'savedFolderName';
 
 async function getFsDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -47,45 +46,83 @@ export async function clearSavedDirectoryHandle(): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(FS_STORE, 'readwrite');
     tx.objectStore(FS_STORE).delete(DIR_KEY);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(LS_FOLDER_NAME_KEY);
+      }
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
 
-/** Opens folder picker, persists handle, returns folder name or null if cancelled */
+/** Opens folder picker, persists handle to IDB + name to localStorage */
 export async function requestSaveDirectory(): Promise<string | null> {
   if (!isFileSystemAccessSupported()) return null;
   try {
     const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
     await storeHandle(handle);
-    return (handle as FileSystemDirectoryHandle).name;
+    const name = (handle as FileSystemDirectoryHandle).name;
+    localStorage.setItem(LS_FOLDER_NAME_KEY, name);
+    return name;
   } catch {
-    // User cancelled or permission denied
     return null;
   }
 }
 
-/** Returns true if permission is already granted without prompting */
-async function hasPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
-  const opts = { mode: 'readwrite' as 'readwrite' };
-  return (await (handle as any).queryPermission(opts)) === 'granted';
+/** Synchronous — reads from localStorage, no async required */
+export function getSavedFolderNameSync(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(LS_FOLDER_NAME_KEY);
 }
 
-/** Ensures readwrite permission, prompting if needed. Returns true if granted. */
+/** Async version for settings display */
+export async function getSavedFolderName(): Promise<string | null> {
+  const handle = await getSavedDirectoryHandle();
+  return handle ? handle.name : null;
+}
+
 async function ensurePermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
   const opts = { mode: 'readwrite' as 'readwrite' };
   if ((await (handle as any).queryPermission(opts)) === 'granted') return true;
   return (await (handle as any).requestPermission(opts)) === 'granted';
 }
 
-function buildFileName(session: Session): string {
+export interface SaveResult {
+  success: boolean;
+  fileName?: string;
+  savedToFolder?: boolean;
+  error?: 'no_directory' | 'permission_denied' | 'write_error';
+}
+
+/** Save any Blob to the selected folder */
+export async function saveBlobToDirectory(blob: Blob, filename: string): Promise<SaveResult> {
+  const handle = await getSavedDirectoryHandle();
+  if (!handle) return { success: false, error: 'no_directory' };
+
+  const permitted = await ensurePermission(handle);
+  if (!permitted) return { success: false, error: 'permission_denied' };
+
+  try {
+    const fileHandle = await handle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return { success: true, fileName: filename, savedToFolder: true };
+  } catch {
+    return { success: false, error: 'write_error' };
+  }
+}
+
+/** Build standardized base filename from session (no extension) */
+export function buildSessionFileName(session: Session, suffix: string): string {
   const date = new Date(session.startTime);
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   const ampm = date.getHours() < 12 ? '오전' : '오후';
   const count = session.patients.length;
-  return `${yyyy}-${mm}-${dd}_${ampm}_진료기록_환자${count}명.txt`;
+  return `${yyyy}-${mm}-${dd}_${ampm}_${suffix}_환자${count}명`;
 }
 
 export interface AutoSaveResult {
@@ -94,10 +131,7 @@ export interface AutoSaveResult {
   error?: 'no_directory' | 'permission_denied' | 'write_error';
 }
 
-/**
- * Saves session as TXT to the previously selected folder.
- * Returns the saved file name on success.
- */
+/** Auto-saves session as TXT to the selected folder on recording stop */
 export async function autoSaveSessionToFile(session: Session): Promise<AutoSaveResult> {
   const handle = await getSavedDirectoryHandle();
   if (!handle) return { success: false, error: 'no_directory' };
@@ -106,10 +140,10 @@ export async function autoSaveSessionToFile(session: Session): Promise<AutoSaveR
   if (!permitted) return { success: false, error: 'permission_denied' };
 
   try {
-    const fileName = buildFileName(session);
+    const fileName = buildSessionFileName(session, '진료기록') + '.txt';
     const fileHandle = await handle.getFileHandle(fileName, { create: true });
     const writable = await fileHandle.createWritable();
-    const content = '\uFEFF' + buildTxtContent(session); // UTF-8 BOM for Korean
+    const content = '\uFEFF' + buildTxtContent(session);
     await writable.write(content);
     await writable.close();
     return { success: true, fileName };
@@ -120,10 +154,4 @@ export async function autoSaveSessionToFile(session: Session): Promise<AutoSaveR
 
 export function isFileSystemAccessSupported(): boolean {
   return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
-}
-
-/** Returns the stored folder name for display, without triggering a permission prompt */
-export async function getSavedFolderName(): Promise<string | null> {
-  const handle = await getSavedDirectoryHandle();
-  return handle ? handle.name : null;
 }

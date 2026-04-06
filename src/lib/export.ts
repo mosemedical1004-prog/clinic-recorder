@@ -1,5 +1,6 @@
 import { Session, Patient, TranscriptSegment } from '@/types';
 import { formatDuration, formatTimestamp } from './patientDetector';
+import { saveBlobToDirectory, buildSessionFileName } from './fileSystem';
 
 export function buildTxtContent(session: Session): string {
   const lines: string[] = [];
@@ -74,17 +75,26 @@ export function buildTxtContent(session: Session): string {
   return lines.join('\n');
 }
 
-export function exportTXT(session: Session): void {
-  const content = buildTxtContent(session);
-  const blob = new Blob(['\uFEFF' + content], { type: 'text/plain;charset=utf-8' });
+function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `진료기록_${new Date(session.startTime).toISOString().slice(0, 10)}_${session.id.slice(0, 8)}.txt`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+export async function exportTXT(session: Session): Promise<void> {
+  const content = buildTxtContent(session);
+  const filename = buildSessionFileName(session, '진료기록') + '.txt';
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/plain;charset=utf-8' });
+
+  const result = await saveBlobToDirectory(blob, filename);
+  if (!result.success) {
+    triggerDownload(blob, filename);
+  }
 }
 
 export async function exportPDF(session: Session): Promise<void> {
@@ -220,9 +230,12 @@ export async function exportPDF(session: Session): Promise<void> {
       }
     }
 
-    doc.save(
-      `진료기록_${new Date(session.startTime).toISOString().slice(0, 10)}_${session.id.slice(0, 8)}.pdf`
-    );
+    const filename = buildSessionFileName(session, '진료기록') + '.pdf';
+    const pdfBlob = doc.output('blob');
+    const dirResult = await saveBlobToDirectory(pdfBlob, filename);
+    if (!dirResult.success) {
+      doc.save(filename);
+    }
   } finally {
     document.body.removeChild(container);
   }

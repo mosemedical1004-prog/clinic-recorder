@@ -6,6 +6,7 @@ import { getSettings, saveSettings, clearAllData, DEFAULT_SETTINGS } from '@/lib
 import {
   requestSaveDirectory,
   getSavedFolderName,
+  getSavedFolderNameSync,
   clearSavedDirectoryHandle,
   isFileSystemAccessSupported,
 } from '@/lib/fileSystem';
@@ -25,7 +26,7 @@ export default function SettingsTab() {
   const [newKeyword, setNewKeyword] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [savedFolderName, setSavedFolderName] = useState<string | null>(null);
+  const [savedFolderName, setSavedFolderName] = useState<string | null>(getSavedFolderNameSync);
   const [folderSelecting, setFolderSelecting] = useState(false);
   const fsSupported = isFileSystemAccessSupported();
 

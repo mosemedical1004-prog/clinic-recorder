@@ -8,7 +8,7 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { generateId, detectNewPatient } from '@/lib/patientDetector';
 import { getSettings, saveSession, DEFAULT_SETTINGS } from '@/lib/db';
-import { autoSaveSessionToFile } from '@/lib/fileSystem';
+import { autoSaveSessionToFile, saveBlobToDirectory } from '@/lib/fileSystem';
 import * as speech from '@/lib/speechEngine';
 
 const SILENCE_TIMEOUT_LS_KEY = 'silenceTimeoutMinutes';
@@ -206,7 +206,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
     wakeLock.release();
 
-    // Auto-download audio file
+    // Save audio file — folder first, browser download fallback
     if (audioBlob) {
       const now = new Date(sessionRef.current?.startTime ?? Date.now());
       const yyyy = now.getFullYear();
@@ -215,14 +215,17 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
       const ampm = now.getHours() < 12 ? '오전' : '오후';
       const ext = audioBlob.type.includes('ogg') ? 'ogg' : audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
       const filename = `${yyyy}-${mm}-${dd}_${ampm}_진료녹음.${ext}`;
-      const url = URL.createObjectURL(audioBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const dirResult = await saveBlobToDirectory(audioBlob, filename);
+      if (!dirResult.success) {
+        const url = URL.createObjectURL(audioBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
     }
 
     if (sessionRef.current) {

@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { ExportButtonsProps } from '@/types';
 import { exportTXT, exportPDF } from '@/lib/export';
+import { saveBlobToDirectory, getSavedFolderNameSync } from '@/lib/fileSystem';
 
 export default function ExportButtons({ session }: ExportButtonsProps) {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleDownloadAudio = () => {
+  const handleDownloadAudio = async () => {
     if (!session.audioBlob) return;
     const now = new Date(session.startTime);
     const yyyy = now.getFullYear();
@@ -17,15 +18,21 @@ export default function ExportButtons({ session }: ExportButtonsProps) {
     const ampm = now.getHours() < 12 ? '오전' : '오후';
     const ext = session.audioBlob.type.includes('ogg') ? 'ogg' : session.audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
     const filename = `${yyyy}-${mm}-${dd}_${ampm}_진료녹음.${ext}`;
-    const url = URL.createObjectURL(session.audioBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    showMessage('success', '녹음 파일이 다운로드되었습니다');
+
+    const dirResult = await saveBlobToDirectory(session.audioBlob, filename);
+    if (dirResult.success) {
+      showMessage('success', `녹음 저장됨: ${getSavedFolderNameSync()}`);
+    } else {
+      const url = URL.createObjectURL(session.audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      showMessage('success', '녹음 파일이 다운로드되었습니다');
+    }
   };
 
   const showMessage = (type: 'success' | 'error', text: string) => {
@@ -33,10 +40,11 @@ export default function ExportButtons({ session }: ExportButtonsProps) {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleExportTXT = () => {
+  const handleExportTXT = async () => {
     try {
-      exportTXT(session);
-      showMessage('success', 'TXT 파일이 다운로드되었습니다');
+      await exportTXT(session);
+      const folder = getSavedFolderNameSync();
+      showMessage('success', folder ? `TXT 저장됨: ${folder}` : 'TXT 파일이 다운로드되었습니다');
     } catch (err) {
       showMessage('error', 'TXT 내보내기 실패');
       console.error(err);
@@ -47,7 +55,8 @@ export default function ExportButtons({ session }: ExportButtonsProps) {
     setExportingPDF(true);
     try {
       await exportPDF(session);
-      showMessage('success', 'PDF 파일이 다운로드되었습니다');
+      const folder = getSavedFolderNameSync();
+      showMessage('success', folder ? `PDF 저장됨: ${folder}` : 'PDF 파일이 다운로드되었습니다');
     } catch (err) {
       showMessage('error', 'PDF 내보내기 실패');
       console.error(err);
