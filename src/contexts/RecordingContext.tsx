@@ -35,6 +35,8 @@ interface RecordingContextValue {
   autoSave: ReturnType<typeof useAutoSave>;
   handleStart: () => Promise<void>;
   handleStop: () => Promise<void>;
+  handlePause: () => void;
+  handleResume: () => void;
   handleAddPatientMarker: () => void;
 }
 
@@ -248,6 +250,16 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [recording, wakeLock, autoSave, transcription.segments]);
 
+  const handlePause = useCallback(() => {
+    speech.stop();
+    recording.pause();
+  }, [recording]);
+
+  const handleResume = useCallback(() => {
+    recording.resume();
+    speech.start(appSettingsRef.current.language);
+  }, [recording]);
+
   const handleAddPatientMarker = useCallback(() => {
     if (recording.state !== 'recording') return;
     const p = addNewPatient();
@@ -260,7 +272,7 @@ export function RecordingProvider({ children }: { children: React.ReactNode }) {
         session, patients, currentPatientId, appSettings,
         autoSaveNotice, setAutoSaveNotice,
         recording, transcription, autoSave,
-        handleStart, handleStop, handleAddPatientMarker,
+        handleStart, handleStop, handlePause, handleResume, handleAddPatientMarker,
       }}
     >
       {children}

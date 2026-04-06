@@ -45,7 +45,7 @@ export interface SessionSettings {
   silenceTimeoutMinutes: number;
 }
 
-export type RecordingState = 'idle' | 'recording' | 'stopped';
+export type RecordingState = 'idle' | 'recording' | 'paused' | 'stopped';
 
 export interface AppSettings {
   language: string;
@@ -66,6 +66,8 @@ export interface RecordingControlsProps {
   state: RecordingState;
   onStart: () => void;
   onStop: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onAddPatientMarker: () => void;
   currentPatientNumber: number;
   duration: number;

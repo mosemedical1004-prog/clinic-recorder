@@ -18,5 +18,7 @@ export function useRecording() {
     error: snap.error,
     start: engine.start,
     stop: engine.stop,
+    pause: engine.pause,
+    resume: engine.resume,
   };
 }

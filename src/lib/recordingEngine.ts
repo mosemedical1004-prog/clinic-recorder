@@ -119,6 +119,22 @@ export function stop(): Promise<Blob | null> {
   });
 }
 
+export function pause(): void {
+  if (!_mr || _mr.state !== 'recording') return;
+  _mr.pause();
+  if (_timer) { clearInterval(_timer); _timer = null; }
+  _notify({ state: 'paused' });
+}
+
+export function resume(): void {
+  if (!_mr || _mr.state !== 'paused') return;
+  _mr.resume();
+  // Adjust _startTime so duration continues from where it paused
+  _startTime = Date.now() - _snap.duration;
+  _timer = setInterval(() => _notify({ duration: Date.now() - _startTime }), 100);
+  _notify({ state: 'recording' });
+}
+
 function detectMime(): string {
   const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
   return types.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';

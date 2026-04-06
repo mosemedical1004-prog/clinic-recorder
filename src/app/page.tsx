@@ -20,7 +20,7 @@ export default function HomePage() {
   const {
     session, patients, currentPatientId, autoSaveNotice, setAutoSaveNotice,
     recording, transcription, autoSave,
-    handleStart, handleStop, handleAddPatientMarker,
+    handleStart, handleStop, handlePause, handleResume, handleAddPatientMarker,
   } = useRecordingContext();
 
   const [activeTab, setActiveTab] = useState<TabName>('recording');
@@ -40,6 +40,7 @@ export default function HomePage() {
   };
 
   const isActive = recording.state === 'recording';
+  const isPaused = recording.state === 'paused';
   const isStopped = recording.state === 'stopped';
 
   const currentSession: Session | null = session
@@ -108,8 +109,8 @@ export default function HomePage() {
             <div className="h-36 shrink-0 p-3 pb-2">
               <AudioVisualizer
                 analyserNode={recording.analyserNode}
-                isRecording={isActive}
-                isPaused={false}
+                isRecording={isActive || isPaused}
+                isPaused={isPaused}
               />
             </div>
 
@@ -152,6 +153,8 @@ export default function HomePage() {
                 state={recording.state}
                 onStart={handleStart}
                 onStop={handleStop}
+                onPause={handlePause}
+                onResume={handleResume}
                 onAddPatientMarker={handleAddPatientMarker}
                 currentPatientNumber={patients.length}
                 duration={recording.duration}
