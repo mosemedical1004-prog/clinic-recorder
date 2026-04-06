@@ -10,12 +10,38 @@ interface HistoryTabProps {
   onSwitchToRecording: () => void;
 }
 
+type PeriodFilter = 'today' | 'week' | 'month' | 'all';
+
+const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
+  { value: 'today', label: '오늘' },
+  { value: 'week',  label: '이번 주' },
+  { value: 'month', label: '이번 달' },
+  { value: 'all',   label: '전체' },
+];
+
+function getPeriodStart(period: PeriodFilter): number {
+  const now = new Date();
+  if (period === 'today') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  }
+  if (period === 'week') {
+    const day = now.getDay(); // 0=Sun
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon).getTime();
+  }
+  if (period === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  }
+  return 0; // 'all'
+}
+
 export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [period, setPeriod] = useState<PeriodFilter>('month');
 
   useEffect(() => {
     loadSessions();
@@ -35,7 +61,6 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
 
   const handleDelete = async (sessionId: string) => {
     if (!confirm('이 세션을 영구적으로 삭제하시겠습니까?')) return;
-
     setDeletingId(sessionId);
     try {
       await deleteSession(sessionId);
@@ -47,7 +72,13 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
     }
   };
 
-  const filteredSessions = sessions
+  // Period-filtered sessions (used for stats + list base)
+  const periodSessions = period === 'all'
+    ? sessions
+    : sessions.filter((s) => s.startTime >= getPeriodStart(period));
+
+  // Period + search + sort (used for list)
+  const filteredSessions = periodSessions
     .filter((session) => {
       if (!searchQuery) return true;
       const dateStr = new Date(session.startTime).toLocaleDateString('ko-KR');
@@ -58,23 +89,25 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
         session.id.includes(searchQuery)
       );
     })
-    .sort((a, b) => {
-      if (sortOrder === 'newest') return b.startTime - a.startTime;
-      return a.startTime - b.startTime;
-    });
+    .sort((a, b) =>
+      sortOrder === 'newest' ? b.startTime - a.startTime : a.startTime - b.startTime
+    );
 
-  const totalPatients = sessions.reduce((sum, s) => sum + s.patients.length, 0);
-  const totalDuration = sessions.reduce((sum, s) => sum + s.duration, 0);
-  const analyzedSessions = sessions.filter((s) => s.patients.some((p) => p.summary)).length;
+  // Stats based on period only
+  const totalPatients = periodSessions.reduce((sum, s) => sum + s.patients.length, 0);
+  const totalDuration = periodSessions.reduce((sum, s) => sum + s.duration, 0);
+  const analyzedSessions = periodSessions.filter((s) => s.patients.some((p) => p.summary)).length;
 
   return (
     <div className="flex-1 overflow-y-auto bg-dark-bg">
       <div className="max-w-5xl mx-auto px-4 py-6">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-white font-bold text-lg">세션 기록</h2>
-            <p className="text-slate-500 text-xs">{sessions.length}개 세션</p>
+            <p className="text-slate-500 text-xs">
+              {period === 'all' ? `전체 ${sessions.length}개` : `${periodSessions.length}개 / 전체 ${sessions.length}개`}
+            </p>
           </div>
           <button
             onClick={onSwitchToRecording}
@@ -87,10 +120,27 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
           </button>
         </div>
 
+        {/* Period filter tabs */}
+        <div className="flex items-center gap-1 p-1 bg-slate-800/60 rounded-xl mb-5 w-fit">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setPeriod(opt.value)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                period === opt.value
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-dark-card border border-slate-700/50 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-white">{sessions.length}</div>
+            <div className="text-2xl font-bold text-white">{periodSessions.length}</div>
             <div className="text-slate-400 text-xs mt-1">총 세션</div>
           </div>
           <div className="bg-dark-card border border-slate-700/50 rounded-xl p-4 text-center">
@@ -112,9 +162,7 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
           <div className="flex-1 relative">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -143,23 +191,26 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
           </div>
         ) : filteredSessions.length === 0 ? (
           <div className="text-center py-16">
-            <svg
-              className="w-14 h-14 mx-auto mb-3 text-slate-700"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
+            <svg className="w-14 h-14 mx-auto mb-3 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
             <p className="text-slate-500 text-lg">
-              {searchQuery ? '검색 결과가 없습니다' : '저장된 세션이 없습니다'}
+              {searchQuery
+                ? '검색 결과가 없습니다'
+                : period === 'all'
+                ? '저장된 세션이 없습니다'
+                : `${PERIOD_OPTIONS.find((o) => o.value === period)?.label} 세션이 없습니다`}
             </p>
-            {!searchQuery && (
+            {!searchQuery && period !== 'all' && (
+              <button
+                onClick={() => setPeriod('all')}
+                className="mt-3 text-sm text-blue-400 hover:text-blue-300 underline"
+              >
+                전체 기간 보기
+              </button>
+            )}
+            {!searchQuery && period === 'all' && (
               <button
                 onClick={onSwitchToRecording}
                 className="inline-block mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors"
@@ -181,25 +232,13 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
                       <div className="flex items-center gap-3 mb-2">
                         <div className="text-white font-semibold">
                           {new Date(session.startTime).toLocaleDateString('ko-KR', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            weekday: 'short',
+                            year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
                           })}
                         </div>
                         <div className="text-slate-500 text-sm">
-                          {new Date(session.startTime).toLocaleTimeString('ko-KR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {new Date(session.startTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                           {session.endTime && (
-                            <>
-                              {' '}-{' '}
-                              {new Date(session.endTime).toLocaleTimeString('ko-KR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </>
+                            <> - {new Date(session.endTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</>
                           )}
                         </div>
                       </div>
@@ -240,13 +279,11 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
 
                       {session.patients.some((p) => p.name) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {session.patients
-                            .filter((p) => p.name)
-                            .map((p) => (
-                              <span key={p.id} className="text-xs px-2 py-0.5 bg-slate-800 text-slate-400 rounded-full">
-                                {p.number}번 {p.name}
-                              </span>
-                            ))}
+                          {session.patients.filter((p) => p.name).map((p) => (
+                            <span key={p.id} className="text-xs px-2 py-0.5 bg-slate-800 text-slate-400 rounded-full">
+                              {p.number}번 {p.name}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -259,10 +296,7 @@ export default function HistoryTab({ onSwitchToRecording }: HistoryTabProps) {
                         </svg>
                       </span>
                       <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleDelete(session.id);
-                        }}
+                        onClick={(e) => { e.preventDefault(); handleDelete(session.id); }}
                         disabled={deletingId === session.id}
                         className="p-2 text-slate-600 hover:text-red-400 rounded-lg transition-colors"
                       >
