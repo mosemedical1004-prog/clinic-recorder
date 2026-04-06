@@ -8,6 +8,26 @@ export default function ExportButtons({ session }: ExportButtonsProps) {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const handleDownloadAudio = () => {
+    if (!session.audioBlob) return;
+    const now = new Date(session.startTime);
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const ampm = now.getHours() < 12 ? '오전' : '오후';
+    const ext = session.audioBlob.type.includes('ogg') ? 'ogg' : session.audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
+    const filename = `${yyyy}-${mm}-${dd}_${ampm}_진료녹음.${ext}`;
+    const url = URL.createObjectURL(session.audioBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showMessage('success', '녹음 파일이 다운로드되었습니다');
+  };
+
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
@@ -105,6 +125,19 @@ export default function ExportButtons({ session }: ExportButtonsProps) {
           )}
         </button>
       </div>
+
+      <button
+        onClick={handleDownloadAudio}
+        disabled={!session.audioBlob}
+        className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors text-sm"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 18.364V12m0 0V5.636m0 6.364l-2.828 2.828M12 12l2.828 2.828M19.07 4.929a9 9 0 010 12.728M4.929 4.929a9 9 0 000 12.728" />
+        </svg>
+        {session.audioBlob
+          ? `녹음 파일 다운로드 (${(session.audioBlob.size / 1024 / 1024).toFixed(1)} MB)`
+          : '녹음 파일 없음'}
+      </button>
 
       <div className="text-slate-600 text-xs text-center">
         {session.patients.length}명 환자 ·{' '}
