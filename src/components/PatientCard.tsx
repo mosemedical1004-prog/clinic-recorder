@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { PatientCardProps, PatientSummary } from '@/types';
 import { formatDuration, formatTimestamp } from '@/lib/patientDetector';
+import { getStoredApiKey } from '@/lib/apiKey';
 
 export default function PatientCard({
   patient,
@@ -27,6 +28,12 @@ export default function PatientCard({
       return;
     }
 
+    const apiKey = getStoredApiKey();
+    if (!apiKey) {
+      setError('API_KEY_MISSING');
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
 
@@ -37,6 +44,7 @@ export default function PatientCard({
         body: JSON.stringify({
           transcript: patientText,
           patientNumber: patient.number,
+          apiKey,
         }),
       });
 
@@ -223,7 +231,16 @@ export default function PatientCard({
       {/* Error display */}
       {error && (
         <div className="px-4 py-2 bg-red-900/20 border-b border-red-700/30">
-          <p className="text-red-400 text-sm">{error}</p>
+          {error === 'API_KEY_MISSING' ? (
+            <p className="text-amber-400 text-sm">
+              AI 요약을 사용하려면 API Key가 필요합니다.{' '}
+              <a href="/" className="underline hover:text-amber-300">
+                설정 탭에서 등록하세요 →
+              </a>
+            </p>
+          ) : (
+            <p className="text-red-400 text-sm">{error}</p>
+          )}
         </div>
       )}
 

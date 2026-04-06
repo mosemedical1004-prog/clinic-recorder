@@ -1,11 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
-const client = new Anthropic();
-
 export async function POST(request: NextRequest) {
   try {
-    const { transcript, patientNumber } = await request.json();
+    const { transcript, patientNumber, apiKey: clientApiKey } = await request.json();
 
     if (!transcript || typeof transcript !== 'string') {
       return Response.json({ error: '유효한 녹취록이 필요합니다.' }, { status: 400 });
@@ -15,12 +13,16 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: '환자 번호가 필요합니다.' }, { status: 400 });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const effectiveApiKey = clientApiKey || process.env.ANTHROPIC_API_KEY;
+
+    if (!effectiveApiKey) {
       return Response.json(
-        { error: 'ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.' },
-        { status: 500 }
+        { error: 'API_KEY_MISSING' },
+        { status: 401 }
       );
     }
+
+    const client = new Anthropic({ apiKey: effectiveApiKey });
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -62,7 +64,6 @@ ${transcript}`,
       return Response.json({ error: '예상치 못한 응답 형식' }, { status: 500 });
     }
 
-    // Extract JSON from response
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return Response.json(
@@ -81,7 +82,6 @@ ${transcript}`,
       );
     }
 
-    // Validate required fields
     const required = ['chiefComplaint', 'symptoms', 'assessment', 'plan'];
     for (const field of required) {
       if (!summary[field]) {
@@ -89,15 +89,9 @@ ${transcript}`,
       }
     }
 
-    if (!Array.isArray(summary.symptoms)) {
-      summary.symptoms = [];
-    }
-    if (!Array.isArray(summary.medications)) {
-      summary.medications = [];
-    }
-    if (!summary.rawText) {
-      summary.rawText = transcript.slice(0, 200);
-    }
+    if (!Array.isArray(summary.symptoms)) summary.symptoms = [];
+    if (!Array.isArray(summary.medications)) summary.medications = [];
+    if (!summary.rawText) summary.rawText = transcript.slice(0, 200);
 
     return Response.json(summary);
   } catch (error) {

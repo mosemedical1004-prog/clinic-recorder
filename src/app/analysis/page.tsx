@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Session, Patient, PatientSummary } from '@/types';
 import { getSession, saveSession } from '@/lib/db';
+import { getStoredApiKey } from '@/lib/apiKey';
 import PatientCard from '@/components/PatientCard';
 import ExportButtons from '@/components/ExportButtons';
 import { formatDuration } from '@/lib/patientDetector';
@@ -19,6 +20,7 @@ function AnalysisContent() {
   const [error, setError] = useState<string | null>(null);
   const [analyzingAll, setAnalyzingAll] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
+  const [analyzeNotice, setAnalyzeNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -85,6 +87,13 @@ function AnalysisContent() {
   const handleAnalyzeAll = async () => {
     if (!session) return;
 
+    const apiKey = getStoredApiKey();
+    if (!apiKey) {
+      setAnalyzeNotice('API_KEY_MISSING');
+      return;
+    }
+    setAnalyzeNotice(null);
+
     const patientsToAnalyze = session.patients.filter((p) => {
       const text = p.transcriptSegments
         .filter((s) => !s.isInterim)
@@ -112,6 +121,7 @@ function AnalysisContent() {
           body: JSON.stringify({
             transcript,
             patientNumber: patient.number,
+            apiKey,
           }),
         });
 
@@ -263,6 +273,24 @@ function AnalysisContent() {
             )}
           </div>
         </div>
+
+        {/* API Key missing notice */}
+        {analyzeNotice === 'API_KEY_MISSING' && (
+          <div className="px-4 py-2 bg-amber-900/30 border-t border-amber-700/30 flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <span className="text-amber-300 text-sm">
+              AI 요약을 사용하려면 API Key가 필요합니다.{' '}
+              <Link href="/" className="underline hover:text-amber-200">메인 화면 설정 탭에서 등록하세요 →</Link>
+            </span>
+            <button onClick={() => setAnalyzeNotice(null)} className="ml-auto text-amber-600 hover:text-amber-400">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Progress bar */}
         {analyzingAll && (
